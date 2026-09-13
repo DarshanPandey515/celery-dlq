@@ -1,0 +1,56 @@
+services:
+  rabbitmq:
+    image: rabbitmq:4-management
+    container_name: rabbitmq
+    hostname: rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: appuser
+      RABBITMQ_DEFAULT_PASS: apppassword
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+
+  django:
+    build: .
+    container_name: django
+    command: python manage.py runserver 0.0.0.0:8000
+    volumes:
+      - .:/app
+    ports:
+      - "8000:8000"
+    environment:
+      CELERY_BROKER_URL: amqp://appuser:apppassword@rabbitmq:5672//
+      CELERY_RESULT_BACKEND: rpc://
+    depends_on:
+      - rabbitmq
+
+  celery_worker:
+    build: .
+    container_name: celery_worker
+    command: celery -A config worker -l INFO
+    volumes:
+      - .:/app
+    environment:
+      CELERY_BROKER_URL: amqp://appuser:apppassword@rabbitmq:5672//
+      CELERY_RESULT_BACKEND: rpc://
+    depends_on:
+      - rabbitmq
+
+  flower:
+    build: .
+    container_name: flower
+    command: celery -A config flower --port=5555
+    volumes:
+      - .:/app
+    ports:
+      - "5555:5555"
+    environment:
+      CELERY_BROKER_URL: amqp://appuser:apppassword@rabbitmq:5672//
+      CELERY_RESULT_BACKEND: rpc://
+    depends_on:
+      - rabbitmq
+
+volumes:
+  rabbitmq_data:
